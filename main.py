@@ -1,3 +1,12 @@
+# -*- coding: utf-8 -*-
+# Komari Washi — 和纸监控 (astrbot_plugin_komari_washi) v2.0.0
+# Author: zzrliu8421 — https://github.com/zzrliu8421/astrbot_plugin_komari_washi
+# License: AGPL-3.0 (see LICENSE)
+#
+# Derivative of: https://github.com/nulijiazaizhong/astrbot_plugin_komari_status (commit 646ec79)
+# Original author: nulijiazaizhong — original repo has NO LICENSE (All Rights Reserved), used with attribution.
+# Upstream Komari: https://github.com/komari-monitor/komari (AGPL-3.0)
+
 import logging
 import re
 from datetime import datetime, timezone, timedelta
@@ -25,12 +34,12 @@ class KomariConfig(BaseModel):
     trigger_public: str = Field("查询\\s*Komari\\s*公开设置", description="[正则] 查询公开设置的触发指令，支持自定义。")
     trigger_version: str = Field("查询\\s*Komari\\s*版本信息", description="[正则] 查询版本信息的触发指令，支持自定义。")
 
-@register("komari_status", "Developer", "Komari 状态监控插件", "1.0.0", "https://github.com/komari-monitor/komari")
+@register("komari_washi", "zzrliu8421", "Komari Washi · 和纸监控 — 暖纸侘寂重制版", "2.0.0", "https://github.com/zzrliu8421/astrbot_plugin_komari_washi")
 class KomariStatusPlugin(Star):
     def __init__(self, context: Context, config: KomariConfig = None):
         super().__init__(context)
         self.config = config or KomariConfig()
-        self.logger = logging.getLogger("astrbot_plugin_komari_status")
+        self.logger = logging.getLogger("astrbot_plugin_komari_washi")
         
         # Load template
         self.template_str = ""
