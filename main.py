@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Komari Washi — 和纸监控 (astrbot_plugin_komari_washi) v2.0.0
+# Komari Washi — 和纸监控 (astrbot_plugin_komari_washi) v2.0.1
 # Author: zzrliu8421 — https://github.com/zzrliu8421/astrbot_plugin_komari_washi
 # License: AGPL-3.0 (see LICENSE)
 #
@@ -27,6 +27,7 @@ class KomariConfig(BaseModel):
     image_output: bool = Field(False, description="开启后，状态报告将调用文本转图像服务以图片形式发送。")
     dark_theme: bool = Field(True, description="开启后，生成的图片将使用深色主题背景。")
     viewport_width: int = Field(600, description="图片生成宽度 (像素)")
+    verify_ssl: bool = Field(True, description="是否验证 TLS 证书（仅在自签名证书等特殊场景下关闭，有中间人风险）")
     
     # Custom Triggers (Regex)
     trigger_nodes: str = Field("查询\\s*Komari\\s*节点状态", description="[正则] 查询节点状态的触发指令，支持自定义。")
@@ -34,7 +35,7 @@ class KomariConfig(BaseModel):
     trigger_public: str = Field("查询\\s*Komari\\s*公开设置", description="[正则] 查询公开设置的触发指令，支持自定义。")
     trigger_version: str = Field("查询\\s*Komari\\s*版本信息", description="[正则] 查询版本信息的触发指令，支持自定义。")
 
-@register("komari_washi", "zzrliu8421", "Komari Washi · 和纸监控 — 暖纸侘寂重制版", "2.0.0", "https://github.com/zzrliu8421/astrbot_plugin_komari_washi")
+@register("komari_washi", "zzrliu8421", "Komari Washi · 和纸监控 — 暖纸侘寂重制版", "2.0.1", "https://github.com/zzrliu8421/astrbot_plugin_komari_washi")
 class KomariStatusPlugin(Star):
     def __init__(self, context: Context, config: KomariConfig = None):
         super().__init__(context)
@@ -107,8 +108,10 @@ class KomariStatusPlugin(Star):
             headers["Cookie"] = f"session_token={self.config.komari_token}"
 
         try:
+            # 默认校验 TLS 证书；仅当 verify_ssl=False 时禁用校验（兼容自签名，需用户显式开启）
+            ssl = True if self.config.verify_ssl else False
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers, timeout=10) as resp:
+                async with session.get(url, headers=headers, timeout=10, ssl=ssl) as resp:
                     if resp.status != 200:
                         return None, f"API 请求错误: {resp.status}"
                     data = await resp.json()
@@ -131,8 +134,9 @@ class KomariStatusPlugin(Star):
         try:
             # Short timeout for status check
             timeout = aiohttp.ClientTimeout(total=3.0)
+            ssl = True if self.config.verify_ssl else False
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.ws_connect(ws_url, headers=headers, ssl=False) as ws:
+                async with session.ws_connect(ws_url, headers=headers, ssl=ssl) as ws:
                     await ws.send_str("get")
                     msg = await ws.receive()
                     if msg.type == aiohttp.WSMsgType.TEXT:
@@ -273,9 +277,10 @@ class KomariStatusPlugin(Star):
 
         realtime_data = []
         try:
-            # 增加 ssl=False 避免证书问题
+            # WebSocket 默认校验 TLS；verify_ssl=False 时才禁用（需用户显式配置）
+            ssl = True if self.config.verify_ssl else False
             async with aiohttp.ClientSession() as session:
-                async with session.ws_connect(ws_url, headers=headers) as ws:
+                async with session.ws_connect(ws_url, headers=headers, ssl=ssl) as ws:
                     await ws.send_str("get")
                     
                     # 尝试读取响应

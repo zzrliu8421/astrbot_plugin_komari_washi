@@ -11,6 +11,12 @@
     "hint": "API Key 或 Session Token (如果是非公开站点则必须)",
     "default": ""
   },
+  "verify_ssl": {
+    "type": "bool",
+    "description": "校验 TLS 证书",
+    "hint": "开启时校验服务器证书（默认安全）。仅在使用自签名证书且确认网络可信时关闭，关闭有中间人风险。",
+    "default": true
+  },
   "image_output": {
     "type": "bool",
     "description": "以图片形式发送",
