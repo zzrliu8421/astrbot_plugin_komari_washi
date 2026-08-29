@@ -2,7 +2,7 @@
 
 ## 来源声明
 
-本项目 `astrbot_plugin_komari_washi` 是对以下原始项目的衍生重制：
+本项目 `astrbot_plugin_komari_washi`（当前 `2.0.3`，`https://github.com/zzrliu8421/astrbot_plugin_komari_washi`）是对以下原始项目的衍生重制：
 
 - **原始项目**：https://github.com/nulijiazaizhong/astrbot_plugin_komari_status
 - **原始提交**：`646ec79`（分支 `main`，截至 2025）
@@ -13,7 +13,7 @@
 
 - 本衍生项目已通过本文件、`CREDITS.md`、`README.md` 致谢段及 `LICENSE` 文件头注释完整保留原始作者署名与溯源链。
 - **原始代码与逻辑**（`main.py`、`_conf_schema.json`、`metadata.yaml` 等）的版权归 `nulijiazaizhong` 所有。
-- **优雅重制部分**（`resources/status.html` / `resources/realtime.html` 的暖纸侘寂视觉重设计、排版、字体与样式、`README` / `NOTICE` / `CREDITS` 文档）版权归 `zzrliu8421`（2026）所有。
+- **优雅重制与后续维护部分**（截至 2.0.3：`resources/status.html` / `resources/realtime.html` 的暖纸侘寂视觉重设计、排版、字体与样式（含离线虚线卡与 `bars-empty`）、`verify_ssl` 安全加固、`kr` 文字/离线修复、`README` / `NOTICE` / `CREDITS` 文档、`logo.png`）版权归 `zzrliu8421`（2026）所有。
 
 ## 本衍生项目的许可
 
