@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Komari Washi — 和纸监控 (astrbot_plugin_komari_washi) v2.0.1
+# Komari Washi — 和纸监控 (astrbot_plugin_komari_washi) v2.0.2
 # Author: zzrliu8421 — https://github.com/zzrliu8421/astrbot_plugin_komari_washi
 # License: AGPL-3.0 (see LICENSE)
 #
@@ -35,7 +35,7 @@ class KomariConfig(BaseModel):
     trigger_public: str = Field("查询\\s*Komari\\s*公开设置", description="[正则] 查询公开设置的触发指令，支持自定义。")
     trigger_version: str = Field("查询\\s*Komari\\s*版本信息", description="[正则] 查询版本信息的触发指令，支持自定义。")
 
-@register("komari_washi", "zzrliu8421", "Komari Washi · 和纸监控 — 暖纸侘寂重制版", "2.0.1", "https://github.com/zzrliu8421/astrbot_plugin_komari_washi")
+@register("komari_washi", "zzrliu8421", "Komari Washi · 和纸监控 — 暖纸侘寂重制版", "2.0.2", "https://github.com/zzrliu8421/astrbot_plugin_komari_washi")
 class KomariStatusPlugin(Star):
     def __init__(self, context: Context, config: KomariConfig = None):
         super().__init__(context)
@@ -480,9 +480,81 @@ class KomariStatusPlugin(Star):
         else:
             msg = ["📊 **Komari 实时状态**"]
             for node in processed_nodes:
-                msg.append(f"\n📌 {node.get('region','')} {node.get('name')}")
-                msg.append(f"   OS: {node.get('os')}")
-                msg.append(f"   内存: {node.get('mem_total_gb', 0)} GB")
+                region = node.get('region', '')
+                name = node.get('name', '未知节点')
+                cpu_pct = node.get('cpu_usage_percent')
+                if cpu_pct is not None:
+                    try:
+                        cpu_f = float(cpu_pct)
+                        if cpu_f >= 80:
+                            status_label = "🔴 高负载"
+                        elif cpu_f >= 50:
+                            status_label = "🟡 中等"
+                        else:
+                            status_label = "🟢 正常"
+                    except:
+                        status_label = "🟢 在线"
+                else:
+                    status_label = "🟢 在线"
+                msg.append(f"\n📌 {status_label} {region} {name}".strip())
+
+                # 系统信息
+                sys_parts = []
+                if node.get('os'):
+                    sys_parts.append(f"系统: {node.get('os')}")
+                if node.get('virtualization'):
+                    sys_parts.append(f"虚拟化: {node.get('virtualization')}")
+                if node.get('group'):
+                    sys_parts.append(f"分组: {node.get('group')}")
+                if node.get('cpu_cores'):
+                    sys_parts.append(f"核心: {node.get('cpu_cores')}C")
+                if sys_parts:
+                    msg.append(f"   {' | '.join(sys_parts)}")
+
+                # CPU
+                if cpu_pct is not None:
+                    msg.append(f"   CPU: {cpu_pct}%")
+
+                # 内存
+                if node.get('ram_usage_percent') is not None:
+                    total = node.get('ram_total_gb', '-')
+                    used = node.get('ram_used_gb', '-')
+                    pct = node.get('ram_usage_percent')
+                    msg.append(f"   内存: {pct}% ({used}/{total} GB)")
+                elif node.get('ram_total_gb') is not None:
+                    # 兼容静态兜底
+                    msg.append(f"   内存: {node.get('ram_total_gb')} GB (已用 {node.get('ram_used_gb', '?')} GB)")
+
+                # 磁盘
+                if node.get('disk_usage_percent') is not None:
+                    total = node.get('disk_total_gb', '-')
+                    used = node.get('disk_used_gb', '-')
+                    pct = node.get('disk_usage_percent')
+                    msg.append(f"   磁盘: {pct}% ({used}/{total} GB)")
+                elif node.get('disk_total_gb') is not None:
+                    msg.append(f"   磁盘: {node.get('disk_total_gb')} GB (已用 {node.get('disk_used_gb', '?')} GB)")
+
+                # 网络
+                if node.get('net_up_str') or node.get('net_down_str'):
+                    up = node.get('net_up_str', '-')
+                    down = node.get('net_down_str', '-')
+                    msg.append(f"   网络: ↑ {up} ↓ {down}")
+                if node.get('traffic_up_str') or node.get('traffic_down_str'):
+                    tu = node.get('traffic_up_str', '-')
+                    td = node.get('traffic_down_str', '-')
+                    msg.append(f"   流量累计: ↑ {tu} ↓ {td}")
+
+                # 负载
+                if node.get('load_1') is not None:
+                    msg.append(f"   负载: {node.get('load_1')} / {node.get('load_5')} / {node.get('load_15')} (1/5/15min)")
+
+                # 运行时间与更新时间
+                if node.get('uptime_str'):
+                    upd = node.get('updated_at', '').replace('T', ' ').replace('Z', '') if node.get('updated_at') else "N/A"
+                    msg.append(f"   运行: {node.get('uptime_str')} | 更新: {upd}")
+                elif node.get('updated_at'):
+                    upd = node.get('updated_at', '').replace('T', ' ').replace('Z', '')
+                    msg.append(f"   更新: {upd}")
             yield event.plain_result("\n".join(msg))
 
     async def _handle_realtime_image_gen(self, event, nodes):
@@ -529,7 +601,40 @@ class KomariStatusPlugin(Star):
             self.logger.error(f"实时状态图片生成失败: {e}")
             msg = ["📊 **Komari 实时状态 (文本模式)**"]
             for node in nodes:
-                msg.append(f"{node.get('name')}: {node.get('os')}")
+                region = node.get('region', '')
+                name = node.get('name', '未知节点')
+                cpu_pct = node.get('cpu_usage_percent')
+                status_label = "🟢 在线"
+                if cpu_pct is not None:
+                    try:
+                        cpu_f = float(cpu_pct)
+                        if cpu_f >= 80:
+                            status_label = "🔴 高负载"
+                        elif cpu_f >= 50:
+                            status_label = "🟡 中等"
+                        else:
+                            status_label = "🟢 正常"
+                    except:
+                        pass
+                msg.append(f"\n📌 {status_label} {region} {name}".strip())
+                if node.get('os'):
+                    msg.append(f"   系统: {node.get('os')}")
+                if cpu_pct is not None:
+                    msg.append(f"   CPU: {cpu_pct}%")
+                if node.get('ram_usage_percent') is not None:
+                    msg.append(f"   内存: {node.get('ram_usage_percent')}% ({node.get('ram_used_gb', '-')}/{node.get('ram_total_gb', '-')} GB)")
+                elif node.get('ram_total_gb') is not None:
+                    msg.append(f"   内存: {node.get('ram_total_gb')} GB")
+                if node.get('disk_usage_percent') is not None:
+                    msg.append(f"   磁盘: {node.get('disk_usage_percent')}% ({node.get('disk_used_gb', '-')}/{node.get('disk_total_gb', '-')} GB)")
+                elif node.get('disk_total_gb') is not None:
+                    msg.append(f"   磁盘: {node.get('disk_total_gb')} GB")
+                if node.get('net_up_str') or node.get('net_down_str'):
+                    msg.append(f"   网络: ↑ {node.get('net_up_str', '-')} ↓ {node.get('net_down_str', '-')}")
+                if node.get('load_1') is not None:
+                    msg.append(f"   负载: {node.get('load_1')} / {node.get('load_5')} / {node.get('load_15')}")
+                if node.get('uptime_str'):
+                    msg.append(f"   运行: {node.get('uptime_str')}")
             yield event.plain_result("\n".join(msg))
 
     def _handle_text_output(self, event, nodes):

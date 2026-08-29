@@ -1,6 +1,6 @@
 name: astrbot_plugin_komari_washi
 display_name: Komari Washi · 和纸监控
-version: 2.0.1
+version: 2.0.2
 author: zzrliu8421
 desc: Komari Washi — 暖纸侘寂风格的 Komari 监控优雅重制版。基于 nulijiazaizhong 原作重绘模板与排版，保留全部数据字段，新增 AGPL-3.0 合规声明。
 repo: https://github.com/zzrliu8421/astrbot_plugin_komari_washi
