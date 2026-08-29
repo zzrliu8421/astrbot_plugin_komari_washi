@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Komari Washi — 和纸监控 (astrbot_plugin_komari_washi) v2.0.2
+# Komari Washi — 和纸监控 (astrbot_plugin_komari_washi) v2.0.3
 # Author: zzrliu8421 — https://github.com/zzrliu8421/astrbot_plugin_komari_washi
 # License: AGPL-3.0 (see LICENSE)
 #
@@ -35,7 +35,7 @@ class KomariConfig(BaseModel):
     trigger_public: str = Field("查询\\s*Komari\\s*公开设置", description="[正则] 查询公开设置的触发指令，支持自定义。")
     trigger_version: str = Field("查询\\s*Komari\\s*版本信息", description="[正则] 查询版本信息的触发指令，支持自定义。")
 
-@register("komari_washi", "zzrliu8421", "Komari Washi · 和纸监控 — 暖纸侘寂重制版", "2.0.2", "https://github.com/zzrliu8421/astrbot_plugin_komari_washi")
+@register("komari_washi", "zzrliu8421", "Komari Washi · 和纸监控 — 暖纸侘寂重制版", "2.0.3", "https://github.com/zzrliu8421/astrbot_plugin_komari_washi")
 class KomariStatusPlugin(Star):
     def __init__(self, context: Context, config: KomariConfig = None):
         super().__init__(context)
@@ -255,6 +255,8 @@ class KomariStatusPlugin(Star):
 
         # 1. 获取节点静态信息
         static_nodes = {}
+        static_by_uuid = {}
+        static_list = []
         try:
             data, _ = await self._fetch_api("/api/nodes")
             if data and data.get("data"):
@@ -263,6 +265,13 @@ class KomariStatusPlugin(Star):
                         static_nodes[n.get("id")] = n
                     if n.get("uuid"):
                         static_nodes[n.get("uuid")] = n
+                    key = n.get("uuid") or n.get("id")
+                    if key and key not in static_by_uuid:
+                        static_by_uuid[key] = n
+                    # 去重加入 static_list
+                    if n not in static_list:
+                        if not any((x.get("uuid")==n.get("uuid") and x.get("uuid") is not None) or (x.get("id")==n.get("id") and n.get("uuid") is None) for x in static_list):
+                            static_list.append(n)
         except Exception as e:
             self.logger.warning(f"静态节点信息获取失败: {e}")
 
@@ -321,6 +330,53 @@ class KomariStatusPlugin(Star):
             return
 
         if not realtime_data:
+            if static_list:
+                self.logger.warning("实时数据为空，回退展示静态节点为离线")
+                processed_fallback = []
+                for s_node in static_list:
+                    offline = s_node.copy()
+                    offline["is_online"] = False
+                    offline["name"] = offline.get("name") or "未知节点"
+                    try:
+                        if "mem_total" in offline:
+                            offline["ram_total_gb"] = round(offline.get("mem_total", 0) / 1024**3, 2)
+                    except:
+                        offline["ram_total_gb"] = 0
+                    try:
+                        if "disk_total" in offline:
+                            offline["disk_total_gb"] = round(offline.get("disk_total", 0) / 1024**3, 2)
+                    except:
+                        offline["disk_total_gb"] = 0
+                    processed_fallback.append(offline)
+                if self.config.image_output:
+                    async for r in self._handle_realtime_image_gen(event, processed_fallback):
+                        yield r
+                else:
+                    msg = ["📊 **Komari 实时状态**（当前无实时推送，展示静态信息）"]
+                    for node in processed_fallback:
+                        region = node.get('region', '')
+                        name = node.get('name', '未知节点')
+                        msg.append(f"\n📌 ⚫ 离线 {region} {name}".strip())
+                        sys_parts = []
+                        if node.get('os'):
+                            sys_parts.append(f"系统: {node.get('os')}")
+                        if node.get('virtualization'):
+                            sys_parts.append(f"虚拟化: {node.get('virtualization')}")
+                        if node.get('group'):
+                            sys_parts.append(f"分组: {node.get('group')}")
+                        if node.get('cpu_cores'):
+                            sys_parts.append(f"核心: {node.get('cpu_cores')}C")
+                        if sys_parts:
+                            msg.append(f"   {' | '.join(sys_parts)}")
+                        if node.get('ram_total_gb') is not None:
+                            msg.append(f"   内存总量: {node.get('ram_total_gb')} GB（离线）")
+                        if node.get('disk_total_gb') is not None:
+                            msg.append(f"   磁盘总量: {node.get('disk_total_gb')} GB（离线）")
+                        if node.get('updated_at'):
+                            upd = node.get('updated_at', '').replace('T', ' ').replace('Z', '')
+                            msg.append(f"   更新: {upd}")
+                    yield event.plain_result("\n".join(msg))
+                return
             yield event.plain_result("未获取到数据，请检查服务状态。")
             return
 
@@ -472,6 +528,33 @@ class KomariStatusPlugin(Star):
                 
             processed_nodes.append(node)
 
+        # 3.5 补全离线节点：static_by_uuid 中未在实时数据中的即为离线，追加展示（让 kr 能看到离线机）
+        try:
+            online_keys = {n.get("uuid") or n.get("id") for n in processed_nodes if n.get("uuid") or n.get("id")}
+            for key, s_node in static_by_uuid.items():
+                if key not in online_keys:
+                    offline = s_node.copy()
+                    offline["is_online"] = False
+                    offline["name"] = offline.get("name") or "未知节点"
+                    try:
+                        if "mem_total" in offline and "ram_total_gb" not in offline:
+                            offline["ram_total_gb"] = round(offline.get("mem_total", 0) / 1024**3, 2)
+                    except:
+                        pass
+                    try:
+                        if "disk_total" in offline and "disk_total_gb" not in offline:
+                            offline["disk_total_gb"] = round(offline.get("disk_total", 0) / 1024**3, 2)
+                    except:
+                        pass
+                    processed_nodes.append(offline)
+            for n in processed_nodes:
+                if "is_online" not in n:
+                    n["is_online"] = (n.get("uuid") or n.get("id")) in online_keys
+                if (n.get("uuid") or n.get("id")) in online_keys:
+                    n["is_online"] = True
+        except Exception as e:
+            self.logger.warning(f"离线节点补全失败: {e}")
+        
         # 4. 输出
         if self.config.image_output:
             # 这里必须使用 async for 来处理生成器
@@ -482,20 +565,24 @@ class KomariStatusPlugin(Star):
             for node in processed_nodes:
                 region = node.get('region', '')
                 name = node.get('name', '未知节点')
-                cpu_pct = node.get('cpu_usage_percent')
-                if cpu_pct is not None:
-                    try:
-                        cpu_f = float(cpu_pct)
-                        if cpu_f >= 80:
-                            status_label = "🔴 高负载"
-                        elif cpu_f >= 50:
-                            status_label = "🟡 中等"
-                        else:
-                            status_label = "🟢 正常"
-                    except:
-                        status_label = "🟢 在线"
+                if node.get('is_online') is False:
+                    status_label = "⚫ 离线"
+                    cpu_pct = None
                 else:
-                    status_label = "🟢 在线"
+                    cpu_pct = node.get('cpu_usage_percent')
+                    if cpu_pct is not None:
+                        try:
+                            cpu_f = float(cpu_pct)
+                            if cpu_f >= 80:
+                                status_label = "🔴 高负载"
+                            elif cpu_f >= 50:
+                                status_label = "🟡 中等"
+                            else:
+                                status_label = "🟢 正常"
+                        except:
+                            status_label = "🟢 在线"
+                    else:
+                        status_label = "🟢 在线"
                 msg.append(f"\n📌 {status_label} {region} {name}".strip())
 
                 # 系统信息

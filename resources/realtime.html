@@ -118,6 +118,11 @@
   .status.is-ok{background:var(--success-bg);border-color:var(--success-border);color:var(--success)}
   .status.is-warn{background:var(--warning-bg);border-color:var(--warning-border);color:var(--warning)}
   .status.is-bad{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger)}
+  .status.is-offline{background:var(--border);border-color:var(--border-strong);color:var(--muted)}
+  .status.is-offline .pill-dot{opacity:0.35}
+  .node.is-offline{opacity:0.88; border-style:dashed}
+  .node.is-offline .region-badge{opacity:0.7}
+  .bars-empty{font-size:11px; color:var(--muted); text-align:center; padding:10px; border:1px dashed var(--border); border-radius:8px; background:var(--bg)}
   .pill-dot{width:6px;height:6px;border-radius:50%;background:currentColor;position:relative;flex-shrink:0;opacity:0.18;box-shadow:0 0 0 3px currentColor}
   .pill-dot::after{content:'';position:absolute;inset:0;border-radius:50%;background:currentColor;opacity:1;box-shadow:0 0 8px currentColor}
   /* Progress */
@@ -186,7 +191,7 @@
     {% endif %}
 
     {% for node in nodes %}
-    <article class="node">
+    <article class="node{% if node.is_online is defined and not node.is_online %} is-offline{% endif %}">
       <div class="node-head">
         <div class="node-ident">
           <div class="region-badge">{{ node.region if node.region else '🏳️' }}</div>
@@ -200,7 +205,9 @@
             </div>
           </div>
         </div>
-        {% if node.cpu_usage_percent is defined %}
+        {% if node.is_online is defined and not node.is_online %}
+          <div class="status is-offline"><span class="pill-dot"></span>离线</div>
+        {% elif node.cpu_usage_percent is defined %}
           {% if node.cpu_usage_percent >= 80 %}
             <div class="status is-bad"><span class="pill-dot"></span>高负载</div>
           {% elif node.cpu_usage_percent >= 50 %}
@@ -214,6 +221,9 @@
       </div>
 
       <div class="bars">
+        {% if node.is_online is defined and not node.is_online %}
+        <div class="bars-empty">⚫ 离线 — 暂无实时数据 · 最后更新 {{ node.updated_at.replace("T", " ").replace("Z", "") if node.updated_at else "N/A" }}</div>
+        {% else %}
         {% if node.cpu_usage_percent is defined %}
         <div class="bar-row">
           <span class="bar-label">CPU</span>
@@ -258,6 +268,10 @@
           </div>
           <span class="bar-value">{{ node.disk_usage_percent }}%</span>
         </div>
+        {% endif %}
+        {% if node.cpu_usage_percent is not defined and node.ram_usage_percent is not defined and node.disk_usage_percent is not defined %}
+        <div class="bars-empty">暂无实时负载数据</div>
+        {% endif %}
         {% endif %}
       </div>
 
